@@ -1,0 +1,137 @@
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/8293733528373/63917387182828/refs/heads/main/7282728Q37262", true))()
+
+local window = library:AddWindow("Sad v1.1 | Private", {
+    main_color = Color3.fromRGB(207, 13, 13),
+    min_size = Vector2.new(685, 800),
+    can_resize = false,
+})
+
+local tabStats = window:AddTab("Stats")
+
+tabStats:AddLabel("Player Statistics").TextSize = 30
+
+local selectedPlayer = game.Players.LocalPlayer
+
+local startTime = tick()
+local initialKills = 0
+
+local function getInitialStats()
+    local player = game.Players.LocalPlayer
+    if player then
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Kills") then
+            initialKills = leaderstats.Kills.Value
+        end
+    end
+end
+
+getInitialStats()
+
+local function formatWithCommas(number)
+    local formatted = tostring(math.floor(number))
+    while true do
+        formatted, count = formatted:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+        if count == 0 then break end
+    end
+    return formatted
+end
+
+local function formatAbbreviated(number)
+    if number >= 1e15 then
+        return string.format("%.1fQa", number / 1e15)
+    elseif number >= 1e12 then
+        return string.format("%.1fT", number / 1e12)
+    elseif number >= 1e9 then
+        return string.format("%.1fB", number / 1e9)
+    elseif number >= 1e6 then
+        return string.format("%.1fM", number / 1e6)
+    elseif number >= 1e3 then
+        return string.format("%.1fK", number / 1e3)
+    else
+        return tostring(math.floor(number))
+    end
+end
+
+local function formatBoth(number)
+    return formatWithCommas(number) .. " (" .. formatAbbreviated(number) .. ")"
+end
+
+local playerDropdown = tabStats:AddDropdown("Select Player", function(selectedText)
+    local playerName = selectedText:match("%| (.+)$") or selectedText
+    selectedPlayer = game.Players:FindFirstChild(playerName)
+    if selectedPlayer then
+        updatePlayerStats()
+    end
+end)
+
+for _, player in ipairs(game.Players:GetPlayers()) do
+    playerDropdown:Add(player.DisplayName .. " | " .. player.Name)
+end
+
+game.Players.PlayerAdded:Connect(function(player)
+    playerDropdown:Add(player.DisplayName .. " | " .. player.Name)
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+    playerDropdown:Clear()
+    for _, p in ipairs(game.Players:GetPlayers()) do
+        playerDropdown:Add(p.DisplayName .. " | " .. p.Name)
+    end
+end)
+
+local durabilityLabel = tabStats:AddLabel("Durability: 0 (0)")
+local strengthLabel = tabStats:AddLabel("Strength: 0 (0)")
+local killsGainLabel = tabStats:AddLabel("Kills Gain: 0 (0)")
+tabStats:AddLabel("------------------")
+
+local function updatePlayerStats()
+    local player = game.Players.LocalPlayer
+    if player then
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats and leaderstats:FindFirstChild("Kills") then
+            local currentKills = leaderstats.Kills.Value
+            local killsGain = currentKills - initialKills
+            killsGainLabel.Text = "Kills Gain: " .. formatBoth(killsGain)
+        else
+            killsGainLabel.Text = "Kills Gain: 0 (0)"
+        end
+    end
+    
+    if selectedPlayer and selectedPlayer.Parent then
+        local durability = selectedPlayer:FindFirstChild("Durability")
+        if durability then
+            durabilityLabel.Text = "Durability: " .. formatBoth(durability.Value)
+        else
+            durabilityLabel.Text = "Durability: 0 (0)"
+        end
+        
+        local leaderstats = selectedPlayer:FindFirstChild("leaderstats")
+        if leaderstats then
+            local strength = leaderstats:FindFirstChild("Strength")
+            if strength then
+                strengthLabel.Text = "Strength: " .. formatBoth(strength.Value)
+            else
+                strengthLabel.Text = "Strength: 0 (0)"
+            end
+        else
+            strengthLabel.Text = "Strength: 0 (0)"
+        end
+    else
+        durabilityLabel.Text = "Durability: 0 (0)"
+        strengthLabel.Text = "Strength: 0 (0)"
+    end
+end
+
+tabStats:AddButton("Reset Session", function()
+    getInitialStats()
+    startTime = tick()
+    updatePlayerStats()
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        updatePlayerStats()
+    end
+end)
+
+updatePlayerStats()
