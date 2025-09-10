@@ -8,7 +8,7 @@ local window = library:AddWindow("Sad v1.1 | Private", {
 
 local tabStats = window:AddTab("Stats")
 
-tabStats:AddLabel("Player Statistics").TextSize = 30
+tabStats:AddLabel("View Stats").TextSize = 30
 
 local selectedPlayer = game.Players.LocalPlayer
 local spectating = false
@@ -92,11 +92,11 @@ local killsGainLabel = tabStats:AddLabel("Kills Gain: 0 (0)")
 
 tabStats:AddLabel("------------------")
 
-local lblTotalDur = tabStats:AddLabel("TOTAL DURABILITY: -")
-local lblWithPets = tabStats:AddLabel("With Pets: -")
+local lblTotalDur = tabStats:AddLabel("TOTAL DURABILITY: 0")
+local lblWithPets = tabStats:AddLabel("With Pets: 0")
 
-lblTotalDur.TextColor3 = Color3.fromRGB(0, 255, 255)
-lblWithPets.TextColor3 = Color3.fromRGB(255, 0, 0)
+lblTotalDur.TextColor3 = Color3.fromRGB(255, 255, 255)
+lblWithPets.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 local function setSpectate(plr)
     if currentConnection then
