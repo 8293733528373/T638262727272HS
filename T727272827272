@@ -10,11 +10,22 @@ local tabStats = window:AddTab("Stats")
 
 tabStats:AddLabel("Player Statistics").TextSize = 30
 
+-- Variáveis para armazenar o jogador selecionado
 local selectedPlayer = game.Players.LocalPlayer
+local spectating = false
+local currentConnection = nil
+local spectateLoop = nil
 
+-- Variáveis para estatísticas de sessão
 local startTime = tick()
 local initialKills = 0
 
+-- Constantes para cálculos
+local ULTIMATE_BOOST_PERCENT = 75
+local PETS_BOOST_PER_PACK = 33.125
+local PETS_MAX = 8
+
+-- Obter kills iniciais
 local function getInitialStats()
     local player = game.Players.LocalPlayer
     if player then
@@ -27,6 +38,7 @@ end
 
 getInitialStats()
 
+-- Função para formatar números com vírgulas
 local function formatWithCommas(number)
     local formatted = tostring(math.floor(number))
     while true do
@@ -36,6 +48,7 @@ local function formatWithCommas(number)
     return formatted
 end
 
+-- Função para formatar números abreviados
 local function formatAbbreviated(number)
     if number >= 1e15 then
         return string.format("%.1fQa", number / 1e15)
@@ -52,10 +65,12 @@ local function formatAbbreviated(number)
     end
 end
 
+-- Função para formatar ambos os formatos
 local function formatBoth(number)
     return formatWithCommas(number) .. " (" .. formatAbbreviated(number) .. ")"
 end
 
+-- Dropdown para selecionar jogador
 local playerDropdown = tabStats:AddDropdown("Select Player", function(selectedText)
     local playerName = selectedText:match("%| (.+)$") or selectedText
     selectedPlayer = game.Players:FindFirstChild(playerName)
@@ -64,14 +79,17 @@ local playerDropdown = tabStats:AddDropdown("Select Player", function(selectedTe
     end
 end)
 
+-- Preencher dropdown com jogadores atuais
 for _, player in ipairs(game.Players:GetPlayers()) do
     playerDropdown:Add(player.DisplayName .. " | " .. player.Name)
 end
 
+-- Atualizar dropdown quando jogador entrar
 game.Players.PlayerAdded:Connect(function(player)
     playerDropdown:Add(player.DisplayName .. " | " .. player.Name)
 end)
 
+-- Atualizar dropdown quando jogador sair
 game.Players.PlayerRemoving:Connect(function(player)
     playerDropdown:Clear()
     for _, p in ipairs(game.Players:GetPlayers()) do
@@ -79,12 +97,87 @@ game.Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
+-- Labels para mostrar os valores básicos
 local durabilityLabel = tabStats:AddLabel("Durability: 0 (0)")
 local strengthLabel = tabStats:AddLabel("Strength: 0 (0)")
 local killsGainLabel = tabStats:AddLabel("Kills Gain: 0 (0)")
+
+-- Separador
 tabStats:AddLabel("------------------")
 
+-- Labels para estatísticas avançadas de durabilidade
+tabStats:AddLabel("Advanced Durability Stats").TextSize = 20
+
+local lblBaseDur = tabStats:AddLabel("Base Durability: -")
+local lblUltimate = tabStats:AddLabel("Ultimate Boost: -")
+local lblPetBoost = tabStats:AddLabel("Pet Boost: -")
+local lblTotalDur = tabStats:AddLabel("TOTAL DURABILITY: -")
+local lblBaseDmg = tabStats:AddLabel("Base Damage: -")
+local lblWithPets = tabStats:AddLabel("With Pets: -")
+
+-- Configurar cores para as labels importantes
+lblTotalDur.TextColor3 = Color3.fromRGB(0, 255, 255)
+lblWithPets.TextColor3 = Color3.fromRGB(255, 0, 0)
+
+-- Função para configurar spectate
+local function setSpectate(plr)
+    if currentConnection then
+        currentConnection:Disconnect()
+        currentConnection = nil
+    end
+
+    local function updateCamera()
+        if spectating and plr and plr.Parent then
+            local humanoid = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                workspace.CurrentCamera.CameraSubject = humanoid
+            end
+        end
+    end
+
+    currentConnection = plr.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid")
+        workspace.CurrentCamera.CameraSubject = hum
+    end)
+
+    if spectateLoop then
+        spectateLoop:Disconnect()
+    end
+    spectateLoop = game:GetService("RunService").Heartbeat:Connect(updateCamera)
+
+    updateCamera()
+end
+
+-- Switch para spectate
+tabStats:AddSwitch("Spectate", function(val)
+    local lp = game.Players.LocalPlayer
+    if val then
+        spectating = true
+        if selectedPlayer then
+            local plr = game.Players:FindFirstChild(selectedPlayer.Name)
+            if plr then
+                setSpectate(plr)
+            end
+        end
+    else
+        spectating = false
+        if currentConnection then
+            currentConnection:Disconnect()
+            currentConnection = nil
+        end
+        if spectateLoop then
+            spectateLoop:Disconnect()
+            spectateLoop = nil
+        end
+        if lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
+            workspace.CurrentCamera.CameraSubject = lp.Character:FindFirstChildOfClass("Humanoid")
+        end
+    end
+end)
+
+-- Função para atualizar as estatísticas
 local function updatePlayerStats()
+    -- Atualizar kills gain (SEUS kills)
     local player = game.Players.LocalPlayer
     if player then
         local leaderstats = player:FindFirstChild("leaderstats")
@@ -97,14 +190,39 @@ local function updatePlayerStats()
         end
     end
     
+    -- Atualizar durability e strength do jogador selecionado
     if selectedPlayer and selectedPlayer.Parent then
+        -- Obter durabilidade
         local durability = selectedPlayer:FindFirstChild("Durability")
         if durability then
             durabilityLabel.Text = "Durability: " .. formatBoth(durability.Value)
+            
+            -- Calcular estatísticas avançadas de durabilidade
+            local baseDur = durability.Value
+            local ultimateBoost = baseDur * (ULTIMATE_BOOST_PERCENT / 100)
+            local petsEquipped = PETS_MAX -- Assumindo máximo de pets por padrão
+            local petBoost = baseDur * ((PETS_BOOST_PER_PACK * petsEquipped) / 100)
+            local totalDur = baseDur + ultimateBoost
+            local withPets = totalDur + petBoost
+            local baseDmg = totalDur * 0.00000000042 -- Fórmula de dano base
+
+            lblBaseDur.Text = "Base Durability: " .. formatAbbreviated(baseDur)
+            lblUltimate.Text = string.format("Ultimate Boost (Lv.5): %s (+%d%%)", formatAbbreviated(ultimateBoost), ULTIMATE_BOOST_PERCENT)
+            lblPetBoost.Text = string.format("Pet Boost (%d): %s (+%.3f%%)", petsEquipped, formatAbbreviated(petBoost), PETS_BOOST_PER_PACK * petsEquipped)
+            lblTotalDur.Text = "TOTAL DURABILITY: " .. formatAbbreviated(totalDur)
+            lblBaseDmg.Text = "Base Damage: " .. formatAbbreviated(baseDmg)
+            lblWithPets.Text = string.format("With Pets (%d): %s", petsEquipped, formatAbbreviated(withPets))
         else
             durabilityLabel.Text = "Durability: 0 (0)"
+            lblBaseDur.Text = "Base Durability: -"
+            lblUltimate.Text = "Ultimate Boost: -"
+            lblPetBoost.Text = "Pet Boost: -"
+            lblTotalDur.Text = "TOTAL DURABILITY: -"
+            lblBaseDmg.Text = "Base Damage: -"
+            lblWithPets.Text = "With Pets: -"
         end
         
+        -- Obter força
         local leaderstats = selectedPlayer:FindFirstChild("leaderstats")
         if leaderstats then
             local strength = leaderstats:FindFirstChild("Strength")
@@ -119,19 +237,28 @@ local function updatePlayerStats()
     else
         durabilityLabel.Text = "Durability: 0 (0)"
         strengthLabel.Text = "Strength: 0 (0)"
+        lblBaseDur.Text = "Base Durability: -"
+        lblUltimate.Text = "Ultimate Boost: -"
+        lblPetBoost.Text = "Pet Boost: -"
+        lblTotalDur.Text = "TOTAL DURABILITY: -"
+        lblBaseDmg.Text = "Base Damage: -"
+        lblWithPets.Text = "With Pets: -"
     end
 end
 
+-- Botão para resetar a sessão
 tabStats:AddButton("Reset Session", function()
     getInitialStats()
     startTime = tick()
     updatePlayerStats()
 end)
 
+-- Atualizar estatísticas a cada segundo
 task.spawn(function()
     while task.wait(1) do
         updatePlayerStats()
     end
 end)
 
+-- Inicializar
 updatePlayerStats()
